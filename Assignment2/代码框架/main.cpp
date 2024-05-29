@@ -30,36 +30,34 @@ Eigen::Matrix4f get_model_matrix(float rotation_angle)
 
 Eigen::Matrix4f get_projection_matrix(float eye_fov, float aspect_ratio, float zNear, float zFar)
 {
-    // TODO: Copy-paste your implementation from the previous assignment.
-    Eigen::Matrix4f projection;
+   // Students will implement this function
 
-    float zTop = tan(eye_fov * 0.5) * abs(zNear);
-    float zRight = zTop * aspect_ratio;
+    Eigen::Matrix4f projection = Eigen::Matrix4f::Identity();
+
+    Eigen::Matrix4f p2o;
+    p2o << zNear,0,0,0,
+           0,zNear,0,0,
+           0,0,zNear+zFar,-zNear*zFar,
+           0,0,1,0;
+
+    float zTop = tan(eye_fov*0.5)*abs(zNear);
+    float zRight = zTop*aspect_ratio;
     float zLeft = -zRight;
     float zBottom = -zTop;
 
-    Eigen::Matrix4f p2o;
-    p2o <<
-    zNear, 0, 0, 0,
-    0, zNear, 0, 0,
-    0, 0, zNear + zFar, -zNear* zNear,
-    0, 0, 1, 0;
+    Eigen::Matrix4f orthoT;
+    orthoT << 1,0,0,0,
+              0,1,0,0,
+              0,0,1,-(zNear+zFar)*0.5,
+              0,0,0,1;
 
-    Eigen::Matrix4f othroT;
-    othroT <<
-    1, 0, 0, 0,
-    0, 1, 0, 0,
-    0, 0, 1, -(zNear + zFar) * 0.5,
-    0, 0, 0, 1;
+    Eigen::Matrix4f orthoS;
+    orthoS << 2/(zRight-zLeft),0,0,0,
+              0,2/(zTop-zBottom),0,0,
+              0,0,2/(zNear-zFar),0,
+              0,0,0,1;
 
-    Eigen::Matrix4f othroS;
-    othroS <<
-    2/ (zRight - zLeft), 0, 0, 0,
-    0, 2 / (zTop - zBottom), 0, 0,
-    0, 0, 2/ (zNear- zFar), 0,
-    0, 0, 0, 1;
-    projection = othroT * othroS * p2o * projection;
-
+    projection = orthoS * orthoT * p2o * projection;
     return projection;
 }
 
@@ -119,7 +117,7 @@ int main(int argc, const char** argv)
 
         r.set_model(get_model_matrix(angle));
         r.set_view(get_view_matrix(eye_pos));
-        r.set_projection(get_projection_matrix(45, 1, 0.1, 50));
+        r.set_projection(get_projection_matrix(45, 1, -0.1, 50));
 
         r.draw(pos_id, ind_id, col_id, rst::Primitive::Triangle);
         cv::Mat image(700, 700, CV_32FC3, r.frame_buffer().data());
@@ -137,7 +135,7 @@ int main(int argc, const char** argv)
 
         r.set_model(get_model_matrix(angle));
         r.set_view(get_view_matrix(eye_pos));
-        r.set_projection(get_projection_matrix(45, 1, -0.1, 50));
+        r.set_projection(get_projection_matrix(45, 1, 0.1, 50));
 
         r.draw(pos_id, ind_id, col_id, rst::Primitive::Triangle);
 
