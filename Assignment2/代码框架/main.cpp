@@ -30,8 +30,9 @@ Eigen::Matrix4f get_model_matrix(float rotation_angle)
 
 Eigen::Matrix4f get_projection_matrix(float eye_fov, float aspect_ratio, float zNear, float zFar)
 {
-   // Students will implement this function
+  /// zNear zFar为近远平面坐标
 
+   // Students will implement this function
     Eigen::Matrix4f projection = Eigen::Matrix4f::Identity();
 
     Eigen::Matrix4f p2o;
@@ -40,7 +41,7 @@ Eigen::Matrix4f get_projection_matrix(float eye_fov, float aspect_ratio, float z
            0,0,zNear+zFar,-zNear*zFar,
            0,0,1,0;
 
-    float zTop = tan(eye_fov*0.5)*abs(zNear);
+    float zTop = tan(eye_fov*0.5)* abs(zNear);
     float zRight = zTop*aspect_ratio;
     float zLeft = -zRight;
     float zBottom = -zTop;
@@ -135,7 +136,7 @@ int main(int argc, const char** argv)
 
         r.set_model(get_model_matrix(angle));
         r.set_view(get_view_matrix(eye_pos));
-        r.set_projection(get_projection_matrix(45, 1, 0.1, 50));
+        r.set_projection(get_projection_matrix(45, 1, -0.1, 50));
 
         r.draw(pos_id, ind_id, col_id, rst::Primitive::Triangle);
 
