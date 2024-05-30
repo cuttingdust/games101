@@ -112,16 +112,19 @@ void rst::rasterizer::draw(pos_buf_id pos_buffer, ind_buf_id ind_buffer, col_buf
 
 //Screen space rasterization
 void rst::rasterizer::rasterize_triangle(const Triangle &t) {
-  auto v = t.toVector4();
+    auto v = t.toVector4();
     float alpha, beta, gamma, lmin=INT_MAX, rmax=INT_MIN, tmax=INT_MIN, bmin=INT_MAX;
 
     // TODO : Find out the bounding box of current triangle.
-    for(auto &k:v){//找到bounding box的边界坐标
-        lmin = int(std::min(lmin,k.x()));
-        rmax = std::max(rmax,k.x());rmax = rmax == int(rmax) ? int(rmax)-1 : rmax;
-        tmax = std::max(tmax,k.y());tmax = tmax == int(tmax) ? int(tmax)-1 : tmax;
-        bmin = int(std::min(bmin,k.y()));
-    }
+    lmin = std::min(v[0].x(), std::min(v[1].x(), v[2].x()));
+    rmax = std::max(v[0].x(), std::max(v[1].x(), v[2].x()));
+    bmin = std::min(v[0].y(), std::min(v[1].y(), v[2].y()));
+    tmax = std::max(v[0].y(), std::max(v[1].y(), v[2].y()));
+
+    lmin = floor(lmin);
+    rmax = ceil(rmax);
+    bmin = floor(bmin);
+    tmax = ceil(tmax);
 
 // iterate through the pixel and find if the current pixel is inside the triangle
     for(float i = lmin; i <= rmax; i++){//遍历bounding box像素
@@ -135,7 +138,7 @@ void rst::rasterizer::rasterize_triangle(const Triangle &t) {
                 z_interpolated *= w_reciprocal;
                 if(std::abs(z_interpolated) < depth_buf[get_index(i,j)]){//如果当前z值比像素z值小（这里是把z值换成正数比较的）
                     // TODO : set the current pixel (use the set_pixel function) to the color of the triangle (use getColor function) if it should be painted.
-                    set_pixel({i,j,1},t.getColor());
+                    set_pixel({i,j,z_interpolated},t.getColor());
                     depth_buf[get_index(i,j)] = abs(z_interpolated);//设置像素颜色，修改像素当前深度
                 }
             }
