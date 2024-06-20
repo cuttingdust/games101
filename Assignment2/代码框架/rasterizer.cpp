@@ -138,10 +138,10 @@ void rst::rasterizer::rasterize_triangle(const Triangle &t) {
                 float w_reciprocal = 1.0/(alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
                 float z_interpolated = alpha * v[0].z() / v[0].w() + beta * v[1].z() / v[1].w() + gamma * v[2].z() / v[2].w();
                 z_interpolated *= w_reciprocal;
-                if(std::abs(z_interpolated) < depth_buf[get_index(i,j)]){//如果当前z值比像素z值小（这里是把z值换成正数比较的）
+                if(-z_interpolated < depth_buf[get_index(i,j)]){//如果当前z值比像素z值小（这里是把z值换成正数比较的）
                     // TODO : set the current pixel (use the set_pixel function) to the color of the triangle (use getColor function) if it should be painted.
                     set_pixel({i,j,1},t.getColor());
-                    depth_buf[get_index(i,j)] = abs(z_interpolated);//设置像素颜色，修改像素当前深度
+                    depth_buf[get_index(i,j)] = -z_interpolated;//设置像素颜色，修改像素当前深度
                 }
             }
         }
