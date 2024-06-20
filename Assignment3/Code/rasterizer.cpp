@@ -7,6 +7,7 @@
 #include <opencv2/opencv.hpp>
 #include <math.h>
 
+#define MSAA
 
 rst::pos_buf_id rst::rasterizer::load_positions(const std::vector<Eigen::Vector3f> &positions)
 {
@@ -259,28 +260,93 @@ static Eigen::Vector2f interpolate(float alpha, float beta, float gamma, const E
 //Screen space rasterization
 void rst::rasterizer::rasterize_triangle(const Triangle& t, const std::array<Eigen::Vector3f, 3>& view_pos) 
 {
-    // TODO: From your HW3, get the triangle rasterization code.
-    // TODO: Inside your rasterization loop:
-    //    * v[i].w() is the vertex view space depth value z.
-    //    * Z is interpolated view space depth for the current pixel
-    //    * zp is depth between zNear and zFar, used for z-buffer
+    auto v = t.toVector4();
+    float alpha, beta, gamma, lmin=INT_MAX, rmax=INT_MIN, tmax=INT_MIN, bmin=INT_MAX, id;
 
-    // float Z = 1.0 / (alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
-    // float zp = alpha * v[0].z() / v[0].w() + beta * v[1].z() / v[1].w() + gamma * v[2].z() / v[2].w();
-    // zp *= Z;
+    // TODO : Find out the bounding box of current triangle.
+    lmin = std::min(v[0].x(), std::min(v[1].x(), v[2].x()));
+    rmax = std::max(v[0].x(), std::max(v[1].x(), v[2].x()));
+    bmin = std::min(v[0].y(), std::min(v[1].y(), v[2].y()));
+    tmax = std::max(v[0].y(), std::max(v[1].y(), v[2].y()));
 
-    // TODO: Interpolate the attributes:
-    // auto interpolated_color
-    // auto interpolated_normal
-    // auto interpolated_texcoords
-    // auto interpolated_shadingcoords
+    lmin = floor(lmin);
+    rmax = ceil(rmax);
+    bmin = floor(bmin);
+    tmax = ceil(tmax);
+#ifndef MSAA
+// iterate through the pixel and find if the current pixel is inside the triangle
+    for(float i = lmin; i <= rmax; i++){//遍历bounding box像素
+        for(float j = bmin; j <= tmax; j++){
+            if(insideTriangle(i + 0.5, j + 0.5, t.v)){//如果在三角形内
+                // If so, use the following code to get the interpolated z value.
+                std::tie(alpha, beta, gamma) = computeBarycentric2D(i, j, t.v);//对当前像素坐标z值插值
 
-    // Use: fragment_shader_payload payload( interpolated_color, interpolated_normal.normalized(), interpolated_texcoords, texture ? &*texture : nullptr);
-    // Use: payload.view_pos = interpolated_shadingcoords;
-    // Use: Instead of passing the triangle's color directly to the frame buffer, pass the color to the shaders first to get the final color;
-    // Use: auto pixel_color = fragment_shader(payload);
+                float w_reciprocal = 1.0/(alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
+                float z_interpolated = alpha * v[0].z() / v[0].w() + beta * v[1].z() / v[1].w() + gamma * v[2].z() / v[2].w();
+                z_interpolated *= w_reciprocal;
 
- 
+                id = get_index(i,j);
+                if(-z_interpolated < depth_buf[get_index(i,j)]){//如果当前z值比像素z值小（这里是把z值换成正数比较的）
+                    // TODO : set the current pixel (use the set_pixel function) to the color of the triangle (use getColor function) if it should be painted.
+
+                    auto interpolated_color = interpolate(alpha, beta, gamma, t.color[0], t.color[1], t.color[2], 1);//颜色插值
+                    auto interpolated_normal = interpolate(alpha, beta, gamma, t.normal[0], t.normal[1], t.normal[2], 1).normalized();//法向量插值
+                    auto interpolated_texcoords = interpolate(alpha, beta, gamma, t.tex_coords[0], t.tex_coords[1], t.tex_coords[2], 1);//纹理坐标插值
+                    auto interpolated_shadingcoords = interpolate(alpha, beta, gamma, view_pos[0], view_pos[1], view_pos[2], 1);//着色点坐标插值
+
+                    fragment_shader_payload payload(interpolated_color, interpolated_normal.normalized(), interpolated_texcoords, texture ? &*texture : nullptr);//将插值属性传入fragment_shader_payload
+                    payload.view_pos = interpolated_shadingcoords;//传入原顶点坐标
+                    depth_buf[id] = -z_interpolated;
+                    frame_buf[id] = fragment_shader(payload);//使用shader计算颜色
+                    // TODO : set the current pixel (use the set_pixel function) to the color of the triangle (use getColor function) if it should be painted.
+                    set_pixel({i,j}, frame_buf[id]);
+                }
+            }
+        }
+    }
+#else
+    std::vector<float> a{0.25,0.25,0.75,0.75,0.25};
+    float mindep = INT_MAX, count = 0, eid;
+    Vector3f color; //color at each vertex;
+
+// iterate through the pixel and find if the current pixel is inside the triangle
+    for(float i = lmin; i <= rmax; i++){
+        for(float j = bmin; j <= tmax; j++){//遍历bounding box像素
+            id = get_index(i, j);
+            count = 0; mindep = INT_MAX, eid = id * 4;
+            for(int k = 0; k < 4; k++){//遍历像素的每个样本
+                if(insideTriangle(i+a[k], j+a[k+1], t.v)){//如果样本在三角形内
+                    // If so, use the following code to get the interpolated z value.
+                    std::tie(alpha, beta, gamma) = computeBarycentric2D(i+a[k], j+a[k+1], t.v);
+                    float w_reciprocal = 1.0/(alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
+                    float z_interpolated = alpha * v[0].z() / v[0].w() + beta * v[1].z() / v[1].w() + gamma * v[2].z() / v[2].w();
+                    z_interpolated *= w_reciprocal;
+
+                    if (-z_interpolated < depth_sample[eid + k]){//如果该样本的深度更小，更新样本深度、颜色表
+                        depth_sample[eid + k] = -z_interpolated;
+
+                        auto interpolated_color = interpolate(alpha, beta, gamma, t.color[0], t.color[1], t.color[2], 1);//颜色插值
+                        auto interpolated_normal = interpolate(alpha, beta, gamma, t.normal[0], t.normal[1], t.normal[2], 1).normalized();//法向量插值
+                        auto interpolated_texcoords = interpolate(alpha, beta, gamma, t.tex_coords[0], t.tex_coords[1], t.tex_coords[2], 1);//纹理坐标插值
+                        auto interpolated_shadingcoords = interpolate(alpha, beta, gamma, view_pos[0], view_pos[1], view_pos[2], 1);//着色点坐标插值
+
+                        fragment_shader_payload payload(interpolated_color, interpolated_normal.normalized(), interpolated_texcoords, texture ? &*texture : nullptr);//将插值属性传入fragment_shader_payload
+                        payload.view_pos = interpolated_shadingcoords;
+                        frame_sample[eid + k] = fragment_shader(payload) / 4;//使用shader计算颜色
+                    }
+                    mindep = std::min(depth_sample[eid + k], mindep);
+                }
+            }
+
+            // TODO : set the current pixel (use the set_pixel function) to the color of the triangle (use getColor function) if it should be painted.
+            color = frame_sample[eid] + frame_sample[eid + 1] + frame_sample[eid + 2] + frame_sample[eid + 3];
+
+            set_pixel({i, j}, color);
+            auto z_depth = std::min(depth_buf[id], mindep);
+            depth_buf[id] = z_depth;
+        }
+    }
+#endif
 }
 
 void rst::rasterizer::set_model(const Eigen::Matrix4f& m)
@@ -303,10 +369,12 @@ void rst::rasterizer::clear(rst::Buffers buff)
     if ((buff & rst::Buffers::Color) == rst::Buffers::Color)
     {
         std::fill(frame_buf.begin(), frame_buf.end(), Eigen::Vector3f{0, 0, 0});
+        std::fill(frame_sample.begin(), frame_sample.end(), Eigen::Vector3f{0, 0, 0});
     }
     if ((buff & rst::Buffers::Depth) == rst::Buffers::Depth)
     {
         std::fill(depth_buf.begin(), depth_buf.end(), std::numeric_limits<float>::infinity());
+        std::fill(depth_sample.begin(), depth_sample.end(), std::numeric_limits<float>::infinity());
     }
 }
 
@@ -314,6 +382,9 @@ rst::rasterizer::rasterizer(int w, int h) : width(w), height(h)
 {
     frame_buf.resize(w * h);
     depth_buf.resize(w * h);
+
+    frame_sample.resize(w * h * 4);
+    depth_sample.resize(w * h * 4);
 
     texture = std::nullopt;
 }

@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include <eigen3/Eigen/Eigen>
+#include <Eigen/Eigen>
 #include <optional>
 #include <algorithm>
 #include "global.hpp"
@@ -108,8 +108,13 @@ namespace rst
         std::function<Eigen::Vector3f(fragment_shader_payload)> fragment_shader;
         std::function<Eigen::Vector3f(vertex_shader_payload)> vertex_shader;
 
+
         std::vector<Eigen::Vector3f> frame_buf;
+        std::vector<Eigen::Vector3f> frame_sample;
+
         std::vector<float> depth_buf;
+        std::vector<float> depth_sample;
+
         int get_index(int x, int y);
 
         int width, height;
