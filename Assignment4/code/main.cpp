@@ -60,8 +60,18 @@ void bezier(const std::vector<cv::Point2f> &control_points, cv::Mat &window)
     /// 对于 每一个t 求他对应的贝塞尔曲线的点 他是通过最基本的公式 (1 - t) * a + t * b 来递归得的
     /// 实际上也可以直接用 n 阶展开式 直接求的 就像 naive_bezier 函数一样
     auto point = recursive_bezier(control_points, t);
-
-    window.at<cv::Vec3b>(point.y, point.x)[1] = 255;
+    std::cout << point.x << ", " << point.y << ")" << '\n';
+     for (int i = -1; i <= 1; i++) {
+         for (int j = -1; j <= 1; j++) {
+             cv::Point2f t;
+             t.x = point.x + i;
+             t.y = point.y + j;
+             float d = sqrt(pow(t.x - ((int)t.x + i) - 0.5, 2) + pow(t.y - ((int)t.y + j) - 0.5, 2));
+             float ratio = 1.0 - sqrt(2) / 3.0 * d;
+             window.at<cv::Vec3b>(t.y, t.x)[1] = std::fmax(255 * ratio, window.at<cv::Vec3b>(t.y, t.x)[1]);
+         }
+     }
+     // window.at<cv::Vec3b>(point.y, point.x)[1] = 255;
   }
 
 }
